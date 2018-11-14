@@ -36,6 +36,7 @@ class FinViz:
         """
         Create a list of the data values so that it can be converted into an array in numpy
         """
+        data_not_there = set()
         for data_type, data_value in self.data.items():
             if data_type in self.important_attributes:
                 is_data_value_number = is_number(data_value)
@@ -48,7 +49,10 @@ class FinViz:
                         self.data_values_list.append(float(data_value[0:len(data_value) - 1]))
                         self.data_type_list.append(data_type)
                     except ValueError:
+                        data_not_there.add(data_type)
                         pass
+        if data_not_there:
+            print(data_not_there)
 
         assert (len(self.data_type_list) == len(self.data_values_list))
 
@@ -158,13 +162,18 @@ class MachineLearning:
 
     def __init__(self, fin_viz_objects):
         # A list of FinViz objects, including the main ticker being analysed
-        self.tickers = fin_viz_objects
+        self.fin_viz_objects = fin_viz_objects
+        self.x_data = None
 
     def convert_attributes_to_array(self):
         """
         Converts all the financial attributes of every FinViz instance into a
-        :return:
         """
+
+        self.x_data = np.empty((len(self.fin_viz_objects), len(self.fin_viz_objects[0].data_values_list)))
+
+        for index, instance in enumerate(self.fin_viz_objects):
+            self.x_data[index, :] = np.asarray(instance.data_values_list)
 
 
 def is_number(s):
@@ -196,13 +205,15 @@ def setup_volume_options():
 def main():
     volume_selection = setup_volume_options()
     ticker_list = ['MSFT']
+    # This list contains any attributes we want learn against. Note that this has already has some attributes removed,
+    # such as 52W week range.
     attributes = ['P/E', 'EPS (ttm)', 'Insider Own', 'Shs Outstand', 'Perf Week', 'Market Cap', 'Forward P/E',
                   'EPS next Y',
-                  'Insider Trans', 'Shs Float', 'Perf Month', 'Income', 'PEG', 'EPS next Q', 'Inst Own', 'Short Float',
+                  'Insider Trans', 'Shs Float', 'Perf Month', 'Income', 'PEG', 'EPS next Q', 'Short Float',
                   'Perf Quarter', 'Sales', 'P/S', 'EPS this Y', 'Inst Trans', 'Short Ratio', 'Perf Half Y', 'Book/sh',
                   'P/B',
                   'EPS next Y', 'ROA', 'Target Price', 'Perf Year', 'Cash/sh', 'P/C', 'EPS next 5Y', 'ROE', 'Perf YTD',
-                  'Dividend', 'P/FCF', 'EPS past 5Y', 'ROI', '52W High', 'Beta', 'Dividend %', 'Quick Ratio',
+                  'P/FCF', 'EPS past 5Y', 'ROI', '52W High', 'Beta', 'Quick Ratio',
                   'Sales past 5Y',
                   'Gross Margin', '52W Low', 'ATR', 'Employees', 'Current Ratio', 'Sales Q/Q', 'Oper. Margin',
                   'RSI (14)',
@@ -213,20 +224,34 @@ def main():
     # Whether we should save the finiancial data in a txt file
     save_information = False
     visualise_data = False
+    attribute_to_visualise = 'PEG'
+    compare_to_markets = True
+    machine_learning_on = False
 
     for ticker in ticker_list:
-        finviz_object = FinViz(ticker=ticker, min_volume=volume_selection['over_50'], compare_to_markets=False,
+        finviz_object = FinViz(ticker=ticker, min_volume=None,
+                               compare_to_markets=compare_to_markets,
                                important_attributes=attributes)
+
+        if compare_to_markets:
+            sector = list(finviz_object.related_tickers.keys())[0]
+            finviz_objects = finviz_object.related_tickers[sector] + [finviz_object]
+        else:
+            finviz_objects = [finviz_object]
 
         if visualise_data:
             sectors = list(finviz_object.related_tickers.keys())
+            finviz_objects = finviz_object.related_tickers[sector] + [finviz_object]
             for sector in sectors:
-                finviz_objects = finviz_object.related_tickers[sector] + [finviz_object]
                 comparison = CompareFinViz(fin_viz_objects=finviz_objects)
-                comparison.visualise(attribute='PEG', sector=sector, main_ticker=finviz_object)
+                comparison.visualise(attribute=attribute_to_visualise, sector=sector, main_ticker=finviz_object)
 
         if save_information:
             save_ticker_data(finviz_object=finviz_object, ticker=ticker)
+        # TODO: Go through entire s&p 500 and then get the ones which each company has then do PCA
+        if machine_learning_on:
+            machine_learning = MachineLearning(fin_viz_objects=finviz_objects)
+            machine_learning.convert_attributes_to_array()
 
 
 if __name__ == "__main__":
